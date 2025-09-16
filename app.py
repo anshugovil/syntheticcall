@@ -69,12 +69,25 @@ def load_sample_data():
         'Strike': [None, None, 1240, 1230, 1200, 1150, 1100, 1200, 1250, 1150],
         'Market price': [1191, 1190, 60, 65, 25, 8, 4, 12, 4, 62]
     }
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+    return df
 
 def process_portfolio(df):
     """
     Process the portfolio to create synthetic calls
     """
+    # Clean column names - remove leading/trailing spaces
+    df.columns = df.columns.str.strip()
+    
+    # Check required columns
+    required_columns = ['Instrument', 'Position', 'Strike', 'Market price']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    
+    if missing_columns:
+        st.error(f"Missing required columns: {missing_columns}")
+        st.info(f"Found columns: {df.columns.tolist()}")
+        return None, None, None
+    
     # Standardize instrument names
     df['Instrument'] = df['Instrument'].str.strip().str.lower()
     
@@ -97,8 +110,11 @@ def process_portfolio(df):
     total_futures = futures['Position'].sum() if not futures.empty else 0
     total_cash = cash['Position'].sum() if not cash.empty else 0
     
-    # Sort puts by strike (highest first)
-    puts_sorted = puts.sort_values('Strike', ascending=False).copy()
+    # Sort puts by strike (highest first) - handle NaN values
+    if not puts.empty:
+        puts_sorted = puts.sort_values('Strike', ascending=False, na_position='last').copy()
+    else:
+        puts_sorted = puts.copy()
     
     # Initialize transformation tracking
     synthetic_calls = []
@@ -309,8 +325,13 @@ def main():
         if uploaded_file is not None:
             try:
                 df = pd.read_csv(uploaded_file)
+                # Clean column names
+                df.columns = df.columns.str.strip()
                 st.session_state['data'] = df
                 st.success(f"✅ File loaded successfully! {len(df)} positions found.")
+                
+                # Show column info for debugging
+                st.info(f"Columns detected: {', '.join(df.columns.tolist())}")
             except Exception as e:
                 st.error(f"Error reading file: {str(e)}")
     
@@ -328,13 +349,17 @@ def main():
         
         if st.button("🔄 Transform Portfolio", type="primary", use_container_width=True):
             with st.spinner("Processing portfolio transformation..."):
-                final_portfolio, transformation_log, underlying_price = process_portfolio(st.session_state['data'])
-                
-                if final_portfolio is not None:
-                    st.session_state['final_portfolio'] = final_portfolio
-                    st.session_state['transformation_log'] = transformation_log
-                    st.session_state['underlying_price'] = underlying_price
-                    st.success("✅ Portfolio transformation complete!")
+                try:
+                    final_portfolio, transformation_log, underlying_price = process_portfolio(st.session_state['data'])
+                    
+                    if final_portfolio is not None:
+                        st.session_state['final_portfolio'] = final_portfolio
+                        st.session_state['transformation_log'] = transformation_log
+                        st.session_state['underlying_price'] = underlying_price
+                        st.success("✅ Portfolio transformation complete!")
+                except Exception as e:
+                    st.error(f"Error during transformation: {str(e)}")
+                    st.info("Please check that your CSV has the correct format with columns: Instrument, Position, Strike, Market price")
     
     # Display results
     if 'final_portfolio' in st.session_state:
