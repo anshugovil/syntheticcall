@@ -5,8 +5,6 @@ A Streamlit application for transforming portfolio positions into synthetic call
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-from io import BytesIO
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
